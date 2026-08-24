@@ -1,0 +1,20 @@
+# Copy to topics.yaml (or pass --config) and edit. Everything about WHAT is
+# learned lives here, in user-editable config — not in code.
+subject: "software architecture & engineering"
+
+# Target session length; the generated topic is sized to fit this.
+session_length_minutes: 30
+
+# easy | intermediate | advanced
+difficulty: "intermediate"
+
+# recap_question = graded recap of yesterday's topic before a new one
+# confirm_only  = simple "did you finish?" check, no grading
+# spaced_review = reserved, not yet implemented (falls back to confirm_only)
+checkin_style: "recap_question"
+
+# Local 24h time the daily topic is sent, HH:MM
+reminder_time: "08:00"
+
+# IANA timezone for reminder_time
+timezone: "Europe/Berlin"

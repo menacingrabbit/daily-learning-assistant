@@ -1,0 +1,7 @@
+.claude/*
+node_modules/
+dist/
+data/
+.env
+config/topics.yaml
+*.log

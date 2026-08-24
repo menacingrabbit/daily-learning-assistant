@@ -1,0 +1,11 @@
+services:
+  daily-learning:
+    build: .
+    container_name: daily-learning-assistant
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # User-editable topic config + persistent SQLite history.
+      - ./config:/app/config:ro
+      - ./data:/app/data
