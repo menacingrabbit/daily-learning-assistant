@@ -3,7 +3,11 @@ import { generateText, isStepCount } from 'ai';
 import type { AppConfig } from '../config.js';
 import type { SessionRow } from '../db/schema.js';
 import { recapCheckPrompt, systemPrompt, topicPrompt, type GenerateTopicContext } from './prompts.js';
-import { buildTools, checkRecapTool, generateTopicTool } from './tools.js';
+import {
+  buildGradeRecapTool,
+  buildProposeTopicTool,
+  buildToolRegistry,
+} from './tools.js';
 import type { RecapResult, TopicResult } from './tools.js';
 
 /**
@@ -36,11 +40,13 @@ export class OpenRouterLlm implements Llm {
       model: this.model,
       system: systemPrompt(config),
       prompt: topicPrompt(ctx),
-      tools: { generateTopic: generateTopicTool() },
-      toolChoice: { type: 'tool', toolName: 'generateTopic' },
+      tools: { proposeTopic: buildProposeTopicTool() },
+      toolChoice: { type: 'tool', toolName: 'proposeTopic' },
       stopWhen: isStepCount(3),
     });
-    const call = result.steps.flatMap((s) => s.toolCalls).find((tc) => tc.toolName === 'generateTopic');
+    const call = result.steps
+      .flatMap((s) => s.toolCalls)
+      .find((tc) => tc.toolName === 'proposeTopic');
     if (!call?.input) throw new Error('Model did not produce a topic');
     return call.input as TopicResult;
   }
@@ -51,16 +57,18 @@ export class OpenRouterLlm implements Llm {
       model: this.model,
       system: systemPrompt(config),
       prompt: recapCheckPrompt(session, config.subject),
-      tools: { checkRecap: checkRecapTool() },
-      toolChoice: { type: 'tool', toolName: 'checkRecap' },
+      tools: { gradeRecap: buildGradeRecapTool() },
+      toolChoice: { type: 'tool', toolName: 'gradeRecap' },
       stopWhen: isStepCount(3),
     });
-    const tool = result.steps.flatMap((s) => s.toolCalls).find((tc) => tc.toolName === 'checkRecap');
+    const tool = result.steps
+      .flatMap((s) => s.toolCalls)
+      .find((tc) => tc.toolName === 'gradeRecap');
     if (!tool?.input) throw new Error('Model did not produce a recap grade');
     return tool.input as RecapResult;
   }
 }
 
-// Keep `buildTools` referenced so the schema stays the single source of truth
-// if callers want the full tool set (e.g. future multi-part prompts).
-export { buildTools };
+// Keep `buildToolRegistry` referenced so the schema stays the single source of
+// truth if callers want the full tool set (e.g. future multi-part prompts).
+export { buildToolRegistry };

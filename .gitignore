@@ -5,3 +5,6 @@ data/
 .env
 config/topics.yaml
 *.log
+
+# Claude code explaination chat conversation
+explain-tool-to-me.txt

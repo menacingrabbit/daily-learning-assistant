@@ -36,7 +36,7 @@ export const recapResultSchema = z.object({
 });
 export type RecapResult = z.infer<typeof recapResultSchema>;
 
-export function generateTopicTool() {
+export function buildProposeTopicTool() {
   return tool({
     description:
       'Propose ONE concrete learning topic sized to the configured session length. ' +
@@ -46,7 +46,7 @@ export function generateTopicTool() {
   });
 }
 
-export function checkRecapTool() {
+export function buildGradeRecapTool() {
   return tool({
     description:
       'Grade the learner’s recap of the previous topic and give short feedback. ' +
@@ -56,10 +56,10 @@ export function checkRecapTool() {
   });
 }
 
-/** The two tools exposed to the model in one run. */
-export function buildTools() {
+/** The map of callable tools exposed to the model (keyed by the tool name). */
+export function buildToolRegistry() {
   return {
-    generateTopic: generateTopicTool(),
-    checkRecap: checkRecapTool(),
+    proposeTopic: buildProposeTopicTool(),
+    gradeRecap: buildGradeRecapTool(),
   };
 }

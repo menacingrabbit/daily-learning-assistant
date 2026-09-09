@@ -77,6 +77,15 @@ describe('Store', () => {
     expect(store.getSessionBefore('2026-08-23')).toBeUndefined();
   });
 
+  it('lists recent sessions newest-first for --list', () => {
+    store.saveSession('2026-08-21', { ...topic, title: 'A' });
+    store.saveSession('2026-08-22', { ...topic, title: 'B' });
+    store.saveSession('2026-08-23', { ...topic, title: 'C' });
+    const rows = store.recentSessions(10);
+    expect(rows.map((r) => r.title)).toEqual(['C', 'B', 'A']);
+    expect(rows[0].date).toBe('2026-08-23');
+  });
+
   it('formats local dates in the configured timezone', () => {
     const berlin = new Date('2026-08-23T22:30:00Z');
     expect(toLocalDate(berlin, 'UTC')).toBe('2026-08-23');

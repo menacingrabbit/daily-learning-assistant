@@ -102,6 +102,14 @@ You'll see something like:
 
 Running in dry-run mode (no Telegram configured yet) the message prints to the terminal. A tiny database is created at `data/db.sqlite` to remember your sessions. The topic you just saw is your first day's lesson.
 
+> **Just want to test the trigger without touching your real history?** Use the isolated test mode:
+>
+> ```bash
+> npm run testrun
+> ```
+>
+> It fires the exact same daily loop the scheduler runs, but against a throwaway database — nothing is written to `data/db.sqlite`, and the result (the suggested topic) prints to the terminal.
+
 ---
 
 ## ✨ Make it a real daily ritual (optional but recommended)
@@ -207,9 +215,14 @@ Node.js scheduler (node-cron)   →   on your schedule, runs the daily loop:
 ```bash
 npm run start        # run the daily scheduler + Telegram polling
 npm run once         # run one full day cycle immediately and exit
+npm run testrun      # simulate the daily trigger against an isolated temp DB (real history untouched)
 npm run dev          # same as start, but auto-reload on code changes
 npm test             # run the test suite (vitest)
 npm run typecheck    # type-check the code (tsc --noEmit)
+npm run list         # admin view: most recent suggested topics (date, title, minutes, truncated summary)
+
+# Any command can point at a different config file:
+npm run once -- --config=path/to/topics.yaml
 ```
 
 ## Project layout (for contributors)

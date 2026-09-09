@@ -92,7 +92,11 @@ describe('loadConfig', () => {
 
   it('keeps a normal model default when MODEL is unset', () => {
     const configPath = writeConfig(VALID_YAML, null);
-    const { env } = loadConfig({ configPath });
+    // An existing empty envFile short-circuits loadDotenv before it reaches the
+    // project-root .env, so a real .env (e.g. MODEL=...) can't leak into the test.
+    const emptyEnv = join(dir, 'empty.env');
+    writeFileSync(emptyEnv, '');
+    const { env } = loadConfig({ configPath, envFile: emptyEnv });
     expect(env.model).toBe('anthropic/claude-sonnet-4.6');
   });
 });

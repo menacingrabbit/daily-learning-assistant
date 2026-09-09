@@ -124,4 +124,15 @@ export class Store {
   allSessions(): SessionRow[] {
     return this.db.prepare('SELECT * FROM sessions ORDER BY date').all() as SessionRow[];
   }
+
+  /**
+   * The most recent sessions, newest first, for the `--list` CLI view.
+   * Each row carries just the fields that view needs (title, summary, date, …).
+   * null leaves are returned as-is so the caller controls display.
+   */
+  recentSessions(limit = 10): SessionRow[] {
+    return this.db
+      .prepare('SELECT * FROM sessions ORDER BY date DESC LIMIT ?')
+      .all(limit) as SessionRow[];
+  }
 }

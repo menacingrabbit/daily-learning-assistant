@@ -2,50 +2,118 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status: greenfield — no code yet
+## Status: implemented — v1 is working
 
-This repo currently contains only planning artifacts. There is **no `src/`, `package.json`, or build setup yet**. The authoritative design is `PLAN.md` — read it before building anything, and treat it as the source of truth for architecture and config decisions. `README.md` is currently just a title.
-
-This CLAUDE.md records the *planned* architecture and run paths so work aligns with the plan; the concrete build/lint/test commands below do **not exist until they are implemented**.
+This is a fully built, testable project (not greenfield). `PLAN.md` is the design source of truth,
+but where code and plan diverge the code wins — update this file and/or `PLAN.md` when you change
+behavior. Everything below is real and runnable.
 
 ## What this project is
 
-A self-hostable agent that builds a daily learning habit. It reminds the user daily via a notification channel, checks whether the previous day's topic was engaged with, and offers a new topic sized to a configurable session length (default 30–45 min). Public on GitHub, MIT-licensed, runnable via Docker or plain npm.
+A self-hostable agent that builds a daily learning habit. It reminds the user daily via a
+notification channel, checks whether the previous day's topic was engaged with, and offers a new
+topic sized to a configurable session length (default 30 minutes). Public on GitHub, MIT-licensed,
+runnable via Docker or plain npm.
 
-## Planned tech stack
+## Tech stack (implemented)
 
-- **Language/runtime:** TypeScript / Node.js
-- **Agent orchestration:** Vercel AI SDK (`ai`), lightweight tool-calling, no heavy framework
-- **Model access:** OpenRouter via `@openrouter/ai-sdk-provider` (bring-your-own key; no single hardcoded provider/model)
-- **Scheduling:** `node-cron` in-process (no external cron/n8n)
-- **Persistence:** SQLite single file via `better-sqlite3`
-- **Notification:** Telegram Bot API (2-min BotFather setup), behind a `Notifier` interface
-- **Packaging:** Docker (`docker-compose.yml`) + plain npm scripts; both documented in README
+- **Language/runtime:** TypeScript / Node.js ≥ 24, ESM (`"type": "module"`), run with `tsx`.
+- **Agent orchestration:** Vercel AI SDK (`ai` v7) tool-calling for structured output
+  (`generateTopic`, `checkRecap` in `src/agent/tools.ts`).
+- **Model access:** OpenRouter via `@openrouter/ai-sdk-provider` (bring-your-own key).
+- **Scheduling:** `node-cron` in-process, timezone-aware, `noOverlap: true`.
+- **Persistence:** single SQLite file via `better-sqlite3` (WAL mode).
+- **Notification:** `Notifier` interface; Telegram (`getUpdates` long-polling) + Console (dry-run)
+  implementations.
+- **Config/validation:** `yaml` for the topics config, `zod` for all schema validation.
+- **Packaging:** Docker (`docker-compose.yml`) + plain npm scripts.
 
-## Planned architecture
+## Project layout (implemented)
 
-Files under `src/`, matching the plan:
+```
+src/
+  index.ts          # entrypoint + CLI: createServices, buildLlm, parseCliArgs, main()
+                      (scheduler, --once, --testrun, --list, --config=<path>)
+  config.ts         # loadConfig(): loads + validates topics.yaml; picks up .env next to it
+  agent/
+    loop.ts         # runDaily() — the core daily loop; LoopDeps (DI), LoopOutcome
+    llm.ts          # Llm interface + OpenRouterLlm (real model calls)
+    fallback.ts     # FallbackLlm — offline seed topics (no OPENROUTER_API_KEY needed)
+    prompts.ts      # systemPrompt, topicPrompt, recapCheckPrompt, message formatters
+    tools.ts        # AI SDK tool defs + zod schemas (TopicResult, RecapResult)
+  notify/
+    notifier.ts     # Notifier interface (send, startListening, stop, name)
+    telegram.ts     # TelegramNotifier (sendMessage / getUpdates long-polling)
+    console.ts      # ConsoleNotifier — dry-run: prints output, reads replies from stdin
+  db/
+    schema.ts       # sessions table DDL
+    store.ts        # Store: save/get sessions, recap state, recentTitles, inMemory()
+tests/              # vitest unit tests (config, loop, store, index)
+```
 
-- `src/index.ts` — entrypoint; scheduler triggers the daily loop
-- `src/agent/loop.ts` — core daily-run logic; `tools.ts` — Vercel AI SDK tool defs (`generateTopic`, `checkRecap`); `prompts.ts` — system prompts parameterized by config
-- `src/notify/notifier.ts` — `send(msg)` / `receive(handler)` interface; `telegram.ts` — reference implementation
-- `src/db/schema.ts` — `sessions` table (date, topic, recap_answer, status); `store.ts` — SQLite read/write helpers
-- `src/config.ts` — loads and validates `topics.yaml` and `.env`
+**Core loop (`src/agent/loop.ts`, `runDaily`)**: load the previous session → if a recap is pending
+and unanswered, re-send it instead of advancing → else (recap_question style) grade yesterday's
+recap → generate a topic scoped by config + recent-topic history → persist a new session row →
+`notifier.send()`. `runDaily` takes `LoopDeps` (store, notifier, llm, config + optional `now`/`tag`),
+so tests inject fakes.
 
-**Core loop (`loop.ts`):** load yesterday's session → if recap pending/unanswered, re-send it instead of advancing; else call the model with tools (acknowledge/grade recap, then `generateTopic` scoped by config + recent-topic history to avoid repeats) → write a new session row → `notifier.send()`. A separate `notifier.receive()` path captures the user's reply as the recap answer.
+## Config
+
+`config/topics.yaml` (user-editable; copy from `config/topics.example.yaml`):
+
+```yaml
+subject: "software architecture & engineering"
+session_length_minutes: 30
+difficulty: intermediate                    # easy | intermediate | advanced
+checkin_style: recap_question               # recap_question | confirm_only | spaced_review (not implemented)
+reminder_time: "08:00"
+timezone: Europe/Berlin
+```
+
+`.env` (next to the config file or in the project root; never commit real keys):
+`OPENROUTER_API_KEY`, `MODEL` (default `anthropic/claude-sonnet-4.6`), `TELEGRAM_BOT_TOKEN`,
+`TELEGRAM_CHAT_ID`, `DB_PATH` (default `data/db.sqlite`).
+
+Absent credentials degrade gracefully: no OpenRouter key → `FallbackLlm` (offline seed topics); no
+Telegram token/chat id → `ConsoleNotifier` (dry-run, replies from stdin).
+
+## Run paths
+
+| Command | What it does |
+|---|---|
+| `npm run start` | run the scheduler + Telegram polling until Ctrl+C |
+| `npm run dev` | same as start, auto-reload on code changes (`tsx watch`) |
+| `npm run once` | run one full day cycle immediately against the **real** DB, then exit |
+| `npm run testrun` | simulate the daily trigger against an **isolated temp DB** (real history untouched), print result, exit |
+| `npm run list` | print the most recent suggested topics (`--list`): date, title, minutes, truncated summary |
+| `npm test` | vitest unit tests |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run build` | `tsc -p tsconfig.build.json` → `dist/` |
+| `docker compose up` | containerized run (mounts `./config` and `./data`) |
+
+CLI flags: `--once`, `--testrun`, `--list`, `--config=<path>` (or `--config <path>`).
 
 ## Design invariants (do not break these)
 
-- **Fully config-driven** — subject area, difficulty, session length, reminder time, and check-in style live in a user-editable `topics.yaml` (default `config/topics.example.yaml`), never hardcoded in code.
-- **Pluggable notification** — all channels go through the `Notifier` interface; Telegram is the only implementation for v1.
-- **No provider/model hardcoding** — model selection goes through OpenRouter, configured per-user via `.env` (`OPENROUTER_API_KEY`, `MODEL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`).
-- **Local history only** — repeat-avoidance and memory come from the local SQLite `sessions` table, not external state.
+- **Fully config-driven** — subject, difficulty, session length, reminder time, check-in style live
+  in `topics.yaml`, never hardcoded.
+- **Pluggable notification** — all channels go through `Notifier`; Telegram and Console are the v1
+  implementations.
+- **No provider/model hardcoding** — model selection via OpenRouter, configured per-user (`.env`).
+- **Local history only** — repeat-avoidance and memory come from the local SQLite `sessions` table.
+- **Offline-friendly** — the app must run end-to-end without credentials (fallback topics + console
+  notifier) so it's testable/dry-runnable anywhere.
 
-## Planned run paths (document both in README once implemented)
+## Testing notes
 
-- **Docker:** `docker compose up` with a filled-in `.env`
-- **Local Node:** `npm install`, copy `.env.example` → `.env`, `npm run start` (optionally `npm run dev` with a watcher)
+- `Store.inMemory()` gives a throwaway SQLite backing store for tests.
+- `runDaily` is exercised directly with fake `Notifier`/`Llm` in `tests/loop.test.ts`.
+- `--testrun` uses a temp DB and never writes to `data/db.sqlite`; keep it that way when you touch
+  it (it also cleans up after itself).
+- `parseCliArgs` / `createServices` are unit-tested in `tests/index.test.ts`.
 
-## Out of scope for v1
+## Out of scope for v1 (do not build without discussion)
 
-Web dashboard/UI (v2), multi-user/hosted SaaS, notification channels beyond Telegram (structure for pluggability only), spaced-repetition beyond the basic recap check-in.
+Web dashboard/UI (v2), multi-user/hosted SaaS, notification channels beyond Telegram/Console
+(structure for pluggability only), spaced-repetition beyond the basic recap check-in (`spaced_review`
+currently warns and falls back to `confirm_only`).
