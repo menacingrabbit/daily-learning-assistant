@@ -14,8 +14,9 @@ Each morning it sends you one concrete learning topic, sized to the time you hav
 
 > 📚 Today's topic: **"Cache invalidation strategies — and how Redis handles them"**
 >
-> Learn the three classic invalidation strategies and when each wins. Build a small demo that
-> evicts a cached value on write, then read on why TTL-based expiry is the most common choice.
+> Learn how the three classic invalidation strategies work — write-through, write-behind and
+> TTL expiry — when each one wins, and why TTL-based expiry stays the most common choice in
+> practice. Read one solid explainer, then compare it against how Redis documents the approach.
 >
 > ⏱ ~30 min · Resources: link-to-a-good-post, docs
 
