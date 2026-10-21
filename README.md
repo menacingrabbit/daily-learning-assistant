@@ -66,8 +66,8 @@ so nothing is hidden away.
 ### 1) Install Docker Desktop (one-time, ~5 minutes)
 
 - **macOS** — [Download for Mac](https://www.docker.com/products/docker-desktop). Pick
-  **Apple silicon** for M1/M2/M3/M4, or **Intel chip** from  → About This Mac. Open the
-  `.dmg`, drag Docker to Applications, launch it.
+  **Apple silicon** for M1/M2/M3/M4, or **Intel chip** (check via *About This Mac* in the
+  Apple menu). Open the `.dmg`, drag Docker to Applications, launch it.
 - **Windows 10/11** — [Download for Windows](https://www.docker.com/products/docker-desktop),
   run the installer, accept the **WSL 2** prompt, restart when asked.
 - **Linux** — Docker Engine plus the Compose plugin:
@@ -286,11 +286,16 @@ above is all you need.
 
 ```bash
 # Node.js ≥ 24 — https://nodejs.org/en/download (macOS/Linux: nvm install 24)
-npm install
+npm ci --ignore-scripts
 cp .env.example .env                               # API keys go here
 cp config/topics.example.yaml config/topics.yaml   # what you want to learn
 npm run once                                       # one full day, right now
 ```
+
+> **Why `--ignore-scripts`?** `better-sqlite3` ships prebuilt binaries, but also carries an
+> implicit `node-gyp rebuild` install script that compiles from source. Without a C++ toolchain
+> and Python that build fails — which is exactly what happened in Docker. Skipping install
+> scripts uses the prebuilt binary instead.
 
 > `.env` stays private (it's in `.gitignore`). Be careful: **never commit your real keys.**
 
@@ -330,6 +335,7 @@ Node.js scheduler (node-cron)   →   on your schedule, runs the daily loop:
 | `config/` or `data/` owned by root (Linux) | `sudo chown -R $USER:$USER config data` |
 | `Config file not found` | `config/topics.yaml` is missing. Create it: `cp config/topics.example.yaml config/topics.yaml` |
 | Dry-run shows generic "offline" topics | No `OPENROUTER_API_KEY` — add it to `.env`, restart |
+| `npm install` fails in `better-sqlite3` with `gyp ERR! find Python` | Use `npm ci --ignore-scripts` — the prebuilt binary needs no compiler |
 | Bot created but no messages arrive | Check `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` both present & correct; chat id is numeric |
 | Wrong reminder clock | Check `timezone` matches where you live (IANA names like `Europe/Berlin`) |
 | "model not found" from OpenRouter | The `MODEL` you set doesn't exist — see [OpenRouter model list](https://openrouter.ai/models) |
