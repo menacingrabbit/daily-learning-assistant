@@ -91,8 +91,30 @@ Telegram token/chat id → `ConsoleNotifier` (dry-run, replies from stdin).
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run build` | `tsc -p tsconfig.build.json` → `dist/` |
 | `docker compose up` | containerized run (mounts `./config` and `./data`) |
+| `docker compose run --rm daily-learning node dist/index.js --once` | containerised one-shot equivalent of `npm run once` |
 
 CLI flags: `--once`, `--testrun`, `--list`, `--config=<path>` (or `--config <path>`).
+
+### Docker details (the beginner-facing path)
+
+- `docker-entrypoint.sh` seeds `/app/config/topics.yaml` from
+  `/opt/dla/topics.example.yaml` (baked outside the mount, since the `./config` bind mount
+  shadows `/app/config`) and then `exec`s the CMD so signals reach Node.
+- `.env` is **optional** — `docker-compose.yml` uses `environment:` with `${VAR:-}` defaults,
+  not `env_file`, so the zero-credential dry run works. `MODEL` must never default to empty
+  (`z.string().min(1)` only tolerates `undefined`).
+- `./config` is mounted **writable** so the entrypoint can seed it; it only ever creates a
+  missing `topics.yaml` and never overwrites one.
+- `.dockerignore` excludes `config/topics.yaml` so a personal config can't be baked into an image.
+- `npm ci` runs with `--ignore-scripts` in both the Dockerfile and CI. `better-sqlite3` ships
+  prebuilds (loaded by `lib/binding.js`) but also carries an implicit `node-gyp rebuild` install
+  script; on `node:*-slim` that compile fails for lack of Python/make/g++. Do not "fix" this by
+  installing build tools — the prebuild path needs none.
+- `--testrun` is DB-isolated but **not** notification-isolated: with Telegram credentials set it
+  still sends a real message.
+- The app has no HTTP server — there is no `EXPOSE` and no port.
+- CI has a `docker` job that builds the image, runs a zero-credential `--testrun` smoke test,
+  and asserts no personal `topics.yaml` is in the image.
 
 ## Design invariants (do not break these)
 

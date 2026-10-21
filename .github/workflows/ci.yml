@@ -16,8 +16,10 @@ jobs:
           node-version: "24"
           cache: npm
 
+      # --ignore-scripts mirrors the container build: better-sqlite3 ships
+      # prebuilds and its node-gyp install script is not needed (see Dockerfile).
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Typecheck
         run: npm run typecheck
@@ -27,3 +29,28 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fails if compose still requires .env (checkout has none - it's gitignored).
+      - name: Compose config is valid without .env
+        run: docker compose config -q
+
+      - name: Build image
+        run: docker build -t daily-learning:ci .
+
+      # Entrypoint seeds topics.yaml, app runs with no credentials, exits 0.
+      # --testrun avoids attaching readline to CI stdin the way --once would.
+      # Also proves the script-free install still yields a working native
+      # binding, so a future `npm ci` change can't silently compile instead.
+      - name: Smoke test (dry run, no credentials)
+        run: docker run --rm daily-learning:ci node dist/index.js --testrun
+
+      # Regression guard: a personal config must never be baked into the image.
+      - name: Image contains only the example config
+        run: >
+          docker run --rm --entrypoint sh daily-learning:ci
+          -c 'test ! -f /app/config/topics.yaml && test -f /app/config/topics.example.yaml'
