@@ -110,7 +110,8 @@ CLI flags: `--once`, `--testrun`, `--list`, `--config=<path>` (or `--config <pat
 - `runDaily` is exercised directly with fake `Notifier`/`Llm` in `tests/loop.test.ts`.
 - `--testrun` uses a temp DB and never writes to `data/db.sqlite`; keep it that way when you touch
   it (it also cleans up after itself).
-- `parseCliArgs` / `createServices` are unit-tested in `tests/index.test.ts`.
+- `parseCliArgs`, `cronExpression` and `createServices` are unit-tested in `tests/index.test.ts`
+  (including the `dbPath` override used by `--testrun`).
 
 ## Out of scope for v1 (do not build without discussion)
 
