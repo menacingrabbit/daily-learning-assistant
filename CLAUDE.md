@@ -106,6 +106,10 @@ CLI flags: `--once`, `--testrun`, `--list`, `--config=<path>` (or `--config <pat
 - `./config` is mounted **writable** so the entrypoint can seed it; it only ever creates a
   missing `topics.yaml` and never overwrites one.
 - `.dockerignore` excludes `config/topics.yaml` so a personal config can't be baked into an image.
+- `npm ci` runs with `--ignore-scripts` in both the Dockerfile and CI. `better-sqlite3` ships
+  prebuilds (loaded by `lib/binding.js`) but also carries an implicit `node-gyp rebuild` install
+  script; on `node:*-slim` that compile fails for lack of Python/make/g++. Do not "fix" this by
+  installing build tools — the prebuild path needs none.
 - `--testrun` is DB-isolated but **not** notification-isolated: with Telegram credentials set it
   still sends a real message.
 - The app has no HTTP server — there is no `EXPOSE` and no port.
