@@ -27,3 +27,26 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fails if compose still requires .env (checkout has none - it's gitignored).
+      - name: Compose config is valid without .env
+        run: docker compose config -q
+
+      - name: Build image
+        run: docker build -t daily-learning:ci .
+
+      # Entrypoint seeds topics.yaml, app runs with no credentials, exits 0.
+      # --testrun avoids attaching readline to CI stdin the way --once would.
+      - name: Smoke test (dry run, no credentials)
+        run: docker run --rm daily-learning:ci node dist/index.js --testrun
+
+      # Regression guard: a personal config must never be baked into the image.
+      - name: Image contains only the example config
+        run: >
+          docker run --rm --entrypoint sh daily-learning:ci
+          -c 'test ! -f /app/config/topics.yaml && test -f /app/config/topics.example.yaml'

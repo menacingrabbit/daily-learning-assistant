@@ -1,11 +1,27 @@
 services:
   daily-learning:
     build: .
+    image: daily-learning-assistant:local
     container_name: daily-learning-assistant
+    init: true
     restart: unless-stopped
-    env_file:
-      - .env
+    # Read ./.env when it exists; fall back to empty values when it does not, so
+    # the very first run works with no credentials at all. Compose loads ./.env
+    # for ${...} substitution automatically - no env_file needed (and
+    # `env_file: .env` would hard-fail when the file is absent).
+    # NOTE: any new .env key must also be added to this list.
+    environment:
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      # Must never be empty: MODEL is z.string().min(1) in src/config.ts.
+      MODEL: ${MODEL:-anthropic/claude-sonnet-4.6}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      DB_PATH: ${DB_PATH:-data/db.sqlite}
     volumes:
-      # User-editable topic config + persistent SQLite history.
-      - ./config:/app/config:ro
+      # What you study + what you have studied. Both live on your computer and
+      # survive rebuilds. ./config must stay writable on first run so the
+      # entrypoint can create topics.yaml from the shipped example.
+      - ./config:/app/config
       - ./data:/app/data
+    # Lets ConsoleNotifier (dry-run mode) read recap replies from your terminal.
+    stdin_open: true
