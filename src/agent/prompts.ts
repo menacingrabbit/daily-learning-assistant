@@ -18,7 +18,9 @@ export function systemPrompt(config: AppConfig): string {
     'You have three jobs: (1) review the learner’s recap of the previous topic, ' +
       '(2) propose ONE concrete, self-contained topic sized to the session length, ' +
       '(3) stay topical and avoid repeating topics the learner already covered.',
-    'Prefer concrete practicing/explaining tasks over passive reading. Topics must be actionable.',
+    'The learner wants to understand the subject: prefer explanatory topics with material to ' +
+      'read or watch. Do not turn topics into programming exercises or build tasks unless the ' +
+      'subject itself calls for hands-on work. Topics must be concrete and specific.',
   ]
     .filter((l) => l.length > 0)
     .join('\n');
@@ -61,11 +63,12 @@ export function topicPrompt(ctx: GenerateTopicContext): string {
     `- Subject: ${ctx.subject}`,
     `- Depth: ${ctx.difficulty}`,
     ctx.stack ? `- Tools/language to use for hands-on work: ${ctx.stack}` : '',
-    `- Target session length: ~${ctx.sessionLengthMinutes} minutes. Over-long, vague, or theoretical topics are bad.`,
-    `- Size the scope of any exercise to that length. Let "${ctx.sessionLengthMinutes} minutes"`,
-    `  determine how much there is to do.`,
+    `- Target session length: ~${ctx.sessionLengthMinutes} minutes of reading/studying. ` +
+      `Pick a topic that can be understood in that time; vague or sprawling topics are bad.`,
+    `- The learner wants to LEARN ABOUT the topic, not perform an exercise. Frame it as ` +
+      `concepts to understand and questions to be able to answer, not as a task to build.`,
     `- Never state a line count, word count, file count or page count anywhere in`,
-    `  the title or summary. Describe the outcome ("a small script that…"), not its size.`,
+    `  the title or summary.`,
     `- MUST NOT repeat or heavily overlap the learner's existing topics:`,
     recent,
     `Return the topic, a 1-3 sentence summary, concrete resources/URLs to start with,`,

@@ -7,47 +7,44 @@ import type { RecapResult, TopicResult } from './tools.js';
 /**
  * Offline topic source used when OPENROUTER_API_KEY is absent — lets the whole
  * loop run end-to-end (tests, dry-run) without any credential or HTTP call.
- * Topics are generic study exercises (the seed list can't know the configured
- * subject), so output is explicitly labeled "offline mode".
+ * Topics are generic study prompts (the seed list can't know the configured
+ * subject), oriented toward reading/understanding rather than hands-on work.
  */
 
 const FALLBACK_SEED: Array<Omit<TopicResult, 'estimatedMinutes'>> = [
   {
-    title: 'Teach the current topic out loud',
+    title: 'Read one good explainer end to end',
     summary:
-      'Explain yesterday’s / today’s material as if to a colleague. Use the Feynman technique: ' +
-      'simplify, find gaps, fix them.',
-    resources: [
-      'https://en.wikipedia.org/wiki/Learning_by_teaching',
-      'https://en.wikipedia.org/wiki/Feynman_technique',
-    ],
+      'Find a solid article, chapter or talk on a topic in the subject and read it in one ' +
+      'sitting. Note the two ideas that were new to you.',
+    resources: ['https://en.wikipedia.org/wiki/Main_Page'],
   },
   {
-    title: 'Worked example: build a tiny demo end-to-end',
+    title: 'Understand the core idea behind one named concept',
     summary:
-      'Pick one concrete idea from the subject and implement a minimal, runnable demo of it, ' +
-      'wiring every layer yourself. Deploy it, then remove it.',
+      'Pick a term or concept in the subject you’ve heard but could not explain. Work out what ' +
+      'problem it solves and why it exists.',
     resources: [],
   },
   {
-    title: 'Compare two approaches on the same problem',
+    title: 'Compare two competing approaches',
     summary:
-      'Take a design/engineering question in the subject and work through two different ' +
-      'approaches in writing: trade-offs, failure modes, when one wins.',
+      'Read up on two different ways the subject solves the same problem, then note their ' +
+      'trade-offs and when each one wins.',
     resources: [],
   },
   {
-    title: 'Map what you learned to a real codebase',
+    title: 'Trace one concept through a real system',
     summary:
-      'Find an open-source codebase that exercises the subject, trace one feature end-to-end, ' +
-      'and annotate how the area you learned shows up there.',
+      'Pick a real-world system, product or codebase that uses the subject, and follow one ' +
+      'concept from documentation to how it actually shows up.',
     resources: ['https://github.com/search?q=stars%3A%3E1000&type=repositories'],
   },
   {
-    title: 'Write the next chapter of your deep-dive notes',
+    title: 'Write down what you now understand',
     summary:
       'Maintain a “today I dug into” log: what surprised you, what you now understand, and the ' +
-      'one thing you’d study next. Write this session’s entry.',
+      'one thing you’d read about next. Write this session’s entry.',
     resources: [],
   },
 ];
