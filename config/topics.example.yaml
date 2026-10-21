@@ -8,6 +8,12 @@ session_length_minutes: 30
 # easy | intermediate | advanced
 difficulty: "intermediate"
 
+# Optional. A preferred language / tools / stack for hands-on topics, e.g.
+# "TypeScript/Node" or "Python". Leave it out (or empty) and the model picks
+# whatever fits the subject — the app is not bound to programming, so this is
+# only a nudge, never a requirement.
+# stack: "TypeScript/Node"
+
 # recap_question = graded recap of yesterday's topic before a new one
 # confirm_only  = simple "did you finish?" check, no grading
 # spaced_review = reserved, not yet implemented (falls back to confirm_only)

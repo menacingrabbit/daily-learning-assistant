@@ -151,6 +151,10 @@ session_length_minutes: 30                     # how long you want per day
 difficulty: intermediate                        # easy | intermediate | advanced
 reminder_time: "08:00"                          # when the bot messages you
 timezone: Europe/Berlin                         # IANA timezone for reminder_time
+
+# Optional — preferred language/tools for hands-on topics. Omit it and the
+# model picks whatever fits; the subject doesn't have to be technical.
+# stack: "TypeScript/Node"
 ```
 
 ### D. Start it

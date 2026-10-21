@@ -90,6 +90,21 @@ describe('loadConfig', () => {
     expect(env.dbPath.endsWith(join('tmp', 'db.sqlite'))).toBe(true);
   });
 
+  it('accepts an optional stack preference', () => {
+    const configPath = writeConfig(`${VALID_YAML}stack: "TypeScript/Node"\n`, null);
+    expect(loadConfig({ configPath }).app.stack).toBe('TypeScript/Node');
+  });
+
+  it('treats a blank stack as unset', () => {
+    const configPath = writeConfig(`${VALID_YAML}stack: "  "\n`, null);
+    expect(loadConfig({ configPath }).app.stack).toBeUndefined();
+  });
+
+  it('omits stack entirely when not configured', () => {
+    const configPath = writeConfig(VALID_YAML, null);
+    expect(loadConfig({ configPath }).app.stack).toBeUndefined();
+  });
+
   it('keeps a normal model default when MODEL is unset', () => {
     const configPath = writeConfig(VALID_YAML, null);
     // An existing empty envFile short-circuits loadDotenv before it reaches the

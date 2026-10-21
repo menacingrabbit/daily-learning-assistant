@@ -14,6 +14,12 @@ export interface AppConfig {
   checkinStyle: CheckinStyle;
   reminderTime: string; // HH:MM, local
   timezone: string; // IANA name
+  /**
+   * Optional tools/language preference (e.g. "TypeScript/Node", "Python").
+   * Free text, and only a nudge: subjects need not be technical at all, so
+   * omit it and the model picks whatever fits.
+   */
+  stack?: string;
 }
 
 /**
@@ -38,6 +44,7 @@ const configSchema = z.object({
     message: 'reminder_time must be HH:MM in 24h format',
   }),
   timezone: z.string().min(1),
+  stack: z.string().min(1).optional(),
 });
 
 function loadYamlConfig(path: string): AppConfig {
@@ -56,6 +63,9 @@ function loadYamlConfig(path: string): AppConfig {
     checkinStyle: validated.checkin_style,
     reminderTime: validated.reminder_time,
     timezone: validated.timezone,
+    // Normalize blank/whitespace-only to undefined so `config.stack && ...`
+    // is a single reliable truthy check downstream.
+    stack: validated.stack?.trim() || undefined,
   };
 }
 

@@ -65,6 +65,7 @@ export async function runDaily(deps: LoopDeps): Promise<LoopOutcome> {
       difficulty: config.difficulty,
       sessionLengthMinutes: config.sessionLengthMinutes,
       recentTitles: store.recentTitles(10),
+      stack: config.stack,
     },
     config,
   );

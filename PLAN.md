@@ -76,6 +76,7 @@ daily-learn-agent/
 subject: "software architecture & engineering"
 session_length_minutes: 30
 difficulty: "intermediate"
+stack: "TypeScript/Node"          # optional: preferred language/tools for hands-on work
 checkin_style: "recap_question"   # options: recap_question | confirm_only | spaced_review
 reminder_time: "08:00"
 timezone: "Europe/Berlin"
@@ -120,3 +121,11 @@ TELEGRAM_CHAT_ID=
   only implement Telegram initially)
 - Spaced-repetition scheduling beyond the basic recap check-in (potential
   future `checkin_style` option)
+
+## Deferred / later (low priority)
+- **Exercise recap grading end-to-end.** `--testrun` always uses a fresh temp
+  DB, so it never has a pending recap and `checkRecap` is never exercised by
+  it — the most complex model call has no real-world coverage today. Revisit
+  with either a `--testrun-recap` style flag that seeds a pending session, or
+  a dedicated manual check in the README. Not urgent: the unit tests cover the
+  loop's grading branch with a fake `Llm`.

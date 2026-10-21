@@ -11,11 +11,17 @@ export function systemPrompt(config: AppConfig): string {
     `You are a daily learning coach. The learner studies "${config.subject}" at a ` +
       `${config.difficulty} level, in sessions of about ` +
       `${config.sessionLengthMinutes} minutes per day.`,
+    config.stack
+      ? `When a topic involves hands-on work, use ${config.stack}. Do not switch languages ` +
+        `or frameworks without being asked.`
+      : '',
     'You have three jobs: (1) review the learner’s recap of the previous topic, ' +
       '(2) propose ONE concrete, self-contained topic sized to the session length, ' +
       '(3) stay topical and avoid repeating topics the learner already covered.',
     'Prefer concrete practicing/explaining tasks over passive reading. Topics must be actionable.',
-  ].join('\n');
+  ]
+    .filter((l) => l.length > 0)
+    .join('\n');
 }
 
 /** Prompt for the model when it should check a user recap. */
@@ -41,6 +47,8 @@ export interface GenerateTopicContext {
   sessionLengthMinutes: number;
   /** Previously covered titles, newest first, for repeat-avoidance. */
   recentTitles: string[];
+  /** Optional tools/language preference; omitted when unset. */
+  stack?: string;
 }
 
 /** Prompt asking the model to propose today's topic. */
@@ -52,12 +60,19 @@ export function topicPrompt(ctx: GenerateTopicContext): string {
     `Generate today's learning topic. Requirements:`,
     `- Subject: ${ctx.subject}`,
     `- Depth: ${ctx.difficulty}`,
+    ctx.stack ? `- Tools/language to use for hands-on work: ${ctx.stack}` : '',
     `- Target session length: ~${ctx.sessionLengthMinutes} minutes. Over-long, vague, or theoretical topics are bad.`,
+    `- Size the scope of any exercise to that length. Let "${ctx.sessionLengthMinutes} minutes"`,
+    `  determine how much there is to do.`,
+    `- Never state a line count, word count, file count or page count anywhere in`,
+    `  the title or summary. Describe the outcome ("a small script that…"), not its size.`,
     `- MUST NOT repeat or heavily overlap the learner's existing topics:`,
     recent,
     `Return the topic, a 1-3 sentence summary, concrete resources/URLs to start with,`,
     `and your estimated minutes needed.`,
-  ].join('\n');
+  ]
+    .filter((l) => l.length > 0)
+    .join('\n');
 }
 
 /** Human-facing message formatting (kept here so DB/prompts don't leak markdown). */

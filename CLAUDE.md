@@ -65,6 +65,7 @@ so tests inject fakes.
 subject: "software architecture & engineering"
 session_length_minutes: 30
 difficulty: intermediate                    # easy | intermediate | advanced
+stack: "TypeScript/Node"                    # optional: preferred language/tools (free text)
 checkin_style: recap_question               # recap_question | confirm_only | spaced_review (not implemented)
 reminder_time: "08:00"
 timezone: Europe/Berlin
