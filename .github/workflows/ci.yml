@@ -39,6 +39,13 @@ jobs:
       - name: Compose config is valid without .env
         run: docker compose config -q
 
+      # The data volume's host path must come from DATA_DIR and stay /app/data.
+      - name: Data volume honours DATA_DIR
+        run: |
+          out=$(DATA_DIR=/tmp/dla-data docker compose config)
+          echo "$out" | grep -q 'source: /tmp/dla-data'
+          echo "$out" | grep -q 'target: /app/data'
+
       - name: Build image
         run: docker build -t daily-learning:ci .
 

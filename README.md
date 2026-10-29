@@ -51,6 +51,7 @@ It's **not** a video-course platform, a quiz app, or a cloud subscription. It's 
 | **OpenRouter API key** | Optional — without it you get built-in offline topics | 2 min, free tier |
 | **Telegram bot + chat id** | Optional — without them messages print in your terminal | 3 min via BotFather |
 | **Node.js ≥ 24** | Only for contributors running the code directly | — |
+| **Google Cloud account** | Only for the 24/7 cloud setup — see [Running it in the cloud](#on-a-server) | free tier |
 
 > 💡 **No credentials? No problem.** Without Telegram/API keys the app runs in **dry-run mode**: messages print to your terminal and you can answer recaps by typing. Perfect for a safe first spin.
 
@@ -161,6 +162,10 @@ The box is disposable; two folders on **your** computer are linked into it:
 You can rebuild or update the box at any time and these folders are untouched. **To back up,
 stop the container (`docker compose stop`) and copy the whole `data/` folder** — the `-wal`
 and `-shm` files are part of the database.
+
+On a server, set `DATA_DIR` in `.env` to a folder outside the checkout (for example
+`/var/lib/dla`), so the database does not depend on where the project lives — see
+[Running it in the cloud](#on-a-server).
 
 ### 8) Make it yours (optional)
 
@@ -277,6 +282,354 @@ overwritten** afterwards — edit it freely. If you delete it, the next start re
 the defaults. To make `./config` read-only (`:ro` in `docker-compose.yml`), create
 `topics.yaml` first.
 
+<a id="on-a-server"></a>
+## ☁️ Running it in the cloud (step by step)
+
+Everything above runs on your own computer, which has to be awake. This section puts the same
+container on an always-on Google Cloud VM, so reminders arrive whether your laptop is open or
+not — and the database sits on a real disk, so it survives every redeploy. The always-free
+`e2-micro` tier costs **$0/month**.
+
+After the one-time setup, your only job is `git push`. GitHub builds a new image, and the
+server picks it up within five minutes:
+
+```
+GitHub repo ──push to main──► GitHub Actions ──build+push──► Artifact Registry
+                                                                   │
+                                                        pull (every 5 min)
+                                                                   ▼
+                                                     Compute Engine VM (e2-micro)
+                                                     └─ /var/lib/dla/db.sqlite
+```
+
+There is no inbound port, no SSH key stored in CI, and no database server to run.
+
+### Why a VM and not Cloud Run or Vercel
+
+Both were checked, and neither can host this app unchanged:
+
+- **Cloud Run** has no persistent disk. Its writable filesystem is RAM — Google's
+  [container contract](https://docs.cloud.google.com/run/docs/container-contract) says *"It is
+  an in-memory file system, so writing to it uses the instance's memory"* and *"Data written to
+  the file system doesn't persist when the instance stops."* Your history would be wiped on
+  every revision deploy. It also expects an HTTP server on `$PORT`; this app is a scheduler plus
+  a Telegram long-poll, with nothing to listen on. The only mountable storage is Cloud Storage
+  (object storage — no POSIX locking, unsuitable for SQLite) or Filestore/NFS (1 TB minimum,
+  ~$200/month).
+- **Vercel** functions stop after 300 seconds on Hobby
+  ([limits](https://vercel.com/docs/functions/limitations)) — far too short to keep the
+  Telegram `getUpdates` poll open.
+
+A VM is the smallest Cloud option that is both free and keeps your history.
+
+---
+
+### 0) Accounts, keys and subscriptions
+
+| What | Needed? | What it costs | Where |
+|---|---|---|---|
+| **Google Cloud** project with **billing enabled** | Yes — runs the VM and the image registry | $0 inside the free tier (see step 10). A card is required to enable billing. | [console.cloud.google.com](https://console.cloud.google.com) |
+| **GitHub** account | Yes — holds the code and runs the build | $0 | [github.com](https://github.com) |
+| **OpenRouter** key | Strongly recommended — without it topics come from a small built-in offline list | Free models exist; paid models bill per token | [openrouter.ai/keys](https://openrouter.ai/keys) |
+| **Telegram** account + bot | Strongly recommended — without it messages only go to the server log | $0 | [@BotFather](https://t.me/BotFather) |
+
+Nothing else is needed: no domain, no managed database, no paid plan. New Google Cloud accounts
+also get a separate $300 / 90-day trial on top of the always-free allowance.
+
+### 1) Fork the repository
+
+The automation builds from **your** GitHub repository, so fork it first:
+
+1. Open [github.com/menacingrabbit/daily-learning-assistant](https://github.com/menacingrabbit/daily-learning-assistant)
+   and click **Fork**.
+2. Work with your copy from now on: `https://github.com/<your-user>/daily-learning-assistant`.
+   Keep the upstream repo as a remote if you want future updates:
+   ```bash
+   git remote add upstream https://github.com/menacingrabbit/daily-learning-assistant.git
+   ```
+
+### 2) Create the Google Cloud project
+
+Install the [gcloud CLI](https://cloud.google.com/sdk/docs/install) locally, or use
+[Cloud Shell](https://console.cloud.google.com/cloudshell) in the browser.
+
+```bash
+gcloud auth login
+gcloud projects create daily-learning-prod --name="Daily Learning"
+gcloud config set project daily-learning-prod
+
+# Enable billing: the free tier still requires a billing account on the project.
+gcloud billing accounts list
+gcloud billing projects link daily-learning-prod \
+  --billing-account=XXXXXX-XXXXXX-XXXXXX
+
+gcloud services enable compute.googleapis.com artifactregistry.googleapis.com
+```
+
+### 3) Create the VM
+
+```bash
+gcloud compute instances create daily-learning \
+  --zone=us-west1-b \
+  --machine-type=e2-micro \
+  --image-family=ubuntu-2404-lts-amd64 \
+  --image-project=ubuntu-os-cloud \
+  --boot-disk-size=10GB \
+  --boot-disk-type=pd-standard
+```
+
+> ⚠️ **The region matters.** The free `e2-micro` allowance only applies in `us-west1`
+> (Oregon), `us-central1` (Iowa) and `us-east1` (South Carolina). Anywhere else the same VM
+> bills at about **$6.11/month**. Latency to Telegram is irrelevant — one message a day.
+
+### 4) Prepare the VM
+
+```bash
+gcloud compute ssh daily-learning --zone=us-west1-b
+```
+
+On the VM:
+
+```bash
+# 2 GB swap: the box has 1 GB RAM. Docker and Node fit without it, but swap keeps
+# the VM comfortable and avoids surprise OOM kills.
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+# Docker + git
+sudo apt-get update
+sudo apt-get install -y docker.io docker-compose-v2 git
+sudo usermod -aG docker "$USER"
+```
+
+Log out and back in (or `newgrp docker`) so the group change applies:
+
+```bash
+exit
+gcloud compute ssh daily-learning --zone=us-west1-b
+docker --version && docker compose version
+```
+
+### 5) Create the image registry
+
+Artifact Registry is where GitHub Actions puts the built image. Making the repository **public**
+means the VM can pull it with no credentials to manage — and the image contains no secrets
+(`.env` and your personal `topics.yaml` are excluded by `.dockerignore`).
+
+```bash
+gcloud artifacts repositories create dla \
+  --repository-format=docker \
+  --location=us-west1 \
+  --description="daily-learning images"
+
+gcloud artifacts repositories add-iam-policy-binding dla \
+  --location=us-west1 \
+  --member=allUsers \
+  --role=roles/artifactregistry.reader
+```
+
+> If your organisation blocks public repositories, leave the second command out and instead
+> authenticate the VM (`sudo gcloud auth configure-docker us-west1-docker.pkg.dev`) after
+> granting its service account `roles/artifactregistry.reader`.
+
+### 6) Let GitHub build on every push
+
+Create a service account that GitHub Actions can use to push images:
+
+```bash
+gcloud iam service-accounts create github-deploy \
+  --display-name="GitHub Actions image push"
+
+gcloud projects add-iam-policy-binding daily-learning-prod \
+  --member="serviceAccount:github-deploy@daily-learning-prod.iam.gserviceaccount.com" \
+  --role="roles/artifactregistry.writer"
+
+gcloud iam service-accounts keys create gh-deploy.json \
+  --iam-account=github-deploy@daily-learning-prod.iam.gserviceaccount.com
+```
+
+In your fork: **Settings → Secrets and variables → Actions**, then add:
+
+| Kind | Name | Value |
+|---|---|---|
+| Secret | `GCP_SA_KEY` | the entire contents of `gh-deploy.json` |
+| Variable | `GCP_PROJECT` | `daily-learning-prod` |
+| Variable | `DEPLOY_ENABLED` | `true` |
+
+The variable is what turns the workflow on. It exists so that a clone of the upstream project
+(which has no Google Cloud account behind it) skips the job instead of failing on a missing key.
+
+Then delete the key file from your computer (`rm gh-deploy.json`) — GitHub has its copy.
+
+The workflow `.github/workflows/deploy.yml` is already in the repo. It runs on every push to
+`main` (and on demand via **Actions → Deploy image → Run workflow**), builds the image, and
+pushes both `:<commit-sha>` and `:latest`. Trigger it once now:
+
+```bash
+# on your computer — clone your fork if you have not already
+git clone https://github.com/<your-user>/daily-learning-assistant.git
+cd daily-learning-assistant
+git commit --allow-empty -m "Trigger first image build"
+git push origin main
+```
+
+Watch it in **Actions → Deploy image**. When it is green, the image exists.
+
+### 7) Put the project on the VM and point it at your data
+
+On the VM (`gcloud compute ssh daily-learning --zone=us-west1-b`):
+
+```bash
+sudo mkdir -p /opt/daily-learning /var/lib/dla
+sudo chown "$USER":"$USER" /opt/daily-learning /var/lib/dla
+
+git clone https://github.com/<your-user>/daily-learning-assistant.git /opt/daily-learning
+cd /opt/daily-learning
+cp .env.example .env
+chmod 600 .env
+nano .env
+```
+
+`.env` must contain at least:
+
+```bash
+# Where the database lives ON THE VM — outside the checkout, so git never touches it.
+DATA_DIR=/var/lib/dla
+
+# The image GitHub Actions builds.
+IMAGE=us-west1-docker.pkg.dev/daily-learning-prod/dla/daily-learning:latest
+
+OPENROUTER_API_KEY=sk-or-...
+TELEGRAM_BOT_TOKEN=123456:ABC-YourTokenHere
+TELEGRAM_CHAT_ID=123456789
+```
+
+`DATA_DIR` is the whole trick behind lossless deploys: the container always writes to
+`/app/data`, and this line decides which host folder that is. Since it is outside the checkout,
+a `git pull`, a re-clone, or a container rebuild cannot start you with an empty database.
+
+### 8) Start it
+
+```bash
+cd /opt/daily-learning
+docker compose pull
+docker compose up -d
+docker compose logs -f          # Ctrl+C only stops the log view
+```
+
+Confirm the database landed where you expect and the app can read it:
+
+```bash
+ls -l /var/lib/dla              # db.sqlite, plus -wal/-shm while it runs
+docker compose run --rm daily-learning node dist/index.js --list
+docker compose run --rm daily-learning node dist/index.js --testrun
+```
+
+`config/topics.yaml` is created on first start from the shipped example and is never
+overwritten. Edit it to choose your subject, session length, reminder time and timezone.
+
+### 9) Make deploys automatic
+
+A small systemd timer checks the registry every five minutes and restarts the container only
+when the image actually changed:
+
+```bash
+sudo tee /etc/systemd/system/dla-deploy.service >/dev/null <<'EOF'
+[Unit]
+Description=Pull the latest daily-learning image and restart the container
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/daily-learning
+ExecStart=/bin/sh -c 'docker compose pull && docker compose up -d'
+EOF
+
+sudo tee /etc/systemd/system/dla-deploy.timer >/dev/null <<'EOF'
+[Unit]
+Description=Check for a new daily-learning image every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=dla-deploy.service
+
+[Install]
+WantedBy=timers.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now dla-deploy.timer
+systemctl list-timers dla-deploy.timer
+```
+
+From now on: **push to `main` → GitHub builds → within five minutes the VM is running the new
+version, with the same database.** To check it happened:
+
+```bash
+journalctl -u dla-deploy.service -n 30
+```
+
+`restart: unless-stopped` in `docker-compose.yml` also brings the container back after a reboot,
+so the timer and the app both survive restarts on their own.
+
+### 10) Backups, rollback and running costs
+
+**Backups.** The database is a normal folder on the VM's persistent disk. The hands-off option
+is a weekly disk snapshot — pennies at this size:
+
+```bash
+gcloud compute resource-policies create snapshot-schedule weekly-backup \
+  --region=us-west1 --weekly-schedule=SATURDAY --start-time=03:00 \
+  --max-retention-days=28
+
+gcloud compute disks add-resource-policies daily-learning \
+  --resource-policies=weekly-backup --zone=us-west1-b
+```
+
+For an ad-hoc copy you can keep off the machine — stop the container so the `-wal` file is
+folded in, archive the folder, then start it again:
+
+```bash
+# on the VM
+cd /opt/daily-learning
+docker compose stop
+sudo tar czf /tmp/dla.tgz -C /var/lib/dla .
+sudo chown "$USER" /tmp/dla.tgz
+docker compose start
+```
+
+```bash
+# on your computer
+gcloud compute scp daily-learning:/tmp/dla.tgz . --zone=us-west1-b
+```
+
+To restore: stop the container, unpack the archive back into `/var/lib/dla`, start it again.
+The `-wal` and `-shm` files belong to the database — keep them together.
+
+**Rollback.** Every image is also tagged with its commit SHA. To pin a known-good version, set
+`IMAGE=…/daily-learning:<sha>` in `.env` and run `docker compose up -d`; remove the pin to
+return to `:latest`.
+
+**Costs.**
+
+| Item | Free allowance | This app | Cost |
+|---|---|---|---|
+| `e2-micro`, 24/7 | every hour of the month, one instance, in the three US regions | 744 h | **$0** |
+| 10 GB standard disk | 30 GB-months | 10 GB | **$0** |
+| Outbound traffic | 1 GB/month from North America | a few MB | **$0** |
+| Weekly snapshots | not free, $0.026/GB-month | well under 1 GB | **~$0.00** |
+
+Billed as soon as you leave the free tier: a second instance (~$6.11/mo), a different region
+(same), a disk over 30 GB, or a reserved but unattached static IP (~$3.65/mo).
+
+**Security.** Nothing to open. The VM makes outbound connections only — to OpenRouter and
+Telegram — so there is no inbound firewall rule and no exposed port.
+
 ---
 
 ## 🧑‍💻 Running it directly with Node (contributors)
@@ -340,6 +693,11 @@ Node.js scheduler (node-cron)   →   on your schedule, runs the daily loop:
 | Wrong reminder clock | Check `timezone` matches where you live (IANA names like `Europe/Berlin`) |
 | "model not found" from OpenRouter | The `MODEL` you set doesn't exist — see [OpenRouter model list](https://openrouter.ai/models) |
 | You want an early test without waiting | Run one full day cycle immediately — see [Commands reference](#commands-reference) |
+| `docker compose pull` says the image wasn't found (server) | No image exists yet — run **Actions → Deploy image → Run workflow** in your fork, wait for green, then pull again |
+| Pushed to `main` but the VM still runs the old version | The timer checks every 5 minutes: `systemctl list-timers dla-deploy.timer`, then `journalctl -u dla-deploy.service -n 30` |
+| Database empty after a deploy (server) | `DATA_DIR` is unset or points elsewhere — `docker compose config \| grep /app/data` shows the host path actually in use |
+| Unexpected Google Cloud charge | The instance is outside `us-west1`/`us-central1`/`us-east1`, or it is a second instance on the same billing account |
+| `permission denied` when running `docker` on the VM | `newgrp docker`, or log out and back in after `usermod -aG docker` |
 
 ---
 

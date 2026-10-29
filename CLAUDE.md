@@ -106,6 +106,14 @@ CLI flags: `--once`, `--testrun`, `--list`, `--config=<path>` (or `--config <pat
 - `./config` is mounted **writable** so the entrypoint can seed it; it only ever creates a
   missing `topics.yaml` and never overwrites one.
 - `.dockerignore` excludes `config/topics.yaml` so a personal config can't be baked into an image.
+- The data mount's host side is `${DATA_DIR:-./data}`. Unset keeps the desktop/CI default; on a
+  server `DATA_DIR=/var/lib/dla` keeps history outside the checkout, so redeploys and re-clones
+  cannot start with an empty DB. `DATA_DIR` is interpolation-only — it is not passed into the
+  container.
+- `image:` is `${IMAGE:-daily-learning-assistant:local}`. Unset builds locally (desktop/CI);
+  a server sets it to an Artifact Registry tag so `docker compose pull` uses the CI-built image.
+  `.github/workflows/deploy.yml` builds and pushes that image on every push to `main`; the VM
+  pulls it on a 5-minute systemd timer. Deployment guide: README, "Running it in the cloud".
 - `npm ci` runs with `--ignore-scripts` in both the Dockerfile and CI. `better-sqlite3` ships
   prebuilds (loaded by `lib/binding.js`) but also carries an implicit `node-gyp rebuild` install
   script; on `node:*-slim` that compile fails for lack of Python/make/g++. Do not "fix" this by

@@ -1,7 +1,9 @@
 services:
   daily-learning:
     build: .
-    image: daily-learning-assistant:local
+    # IMAGE lets a server run a prebuilt image instead of compiling locally
+    # (see README, "Running it in the cloud"). Unset = build here, as before.
+    image: ${IMAGE:-daily-learning-assistant:local}
     container_name: daily-learning-assistant
     init: true
     restart: unless-stopped
@@ -9,7 +11,9 @@ services:
     # the very first run works with no credentials at all. Compose loads ./.env
     # for ${...} substitution automatically - no env_file needed (and
     # `env_file: .env` would hard-fail when the file is absent).
-    # NOTE: any new .env key must also be added to this list.
+    # NOTE: any new .env key must also be added to this list. The exception is
+    # DATA_DIR, which only feeds the volume path below and is never passed into
+    # the container.
     environment:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       # Must never be empty: MODEL is z.string().min(1) in src/config.ts.
@@ -22,6 +26,9 @@ services:
       # survive rebuilds. ./config must stay writable on first run so the
       # entrypoint can create topics.yaml from the shipped example.
       - ./config:/app/config
-      - ./data:/app/data
+      # Unset -> ./data, exactly as before. On a server set DATA_DIR to an
+      # absolute path outside the checkout, so a re-clone or a moved project
+      # cannot start the bot with an empty history.
+      - ${DATA_DIR:-./data}:/app/data
     # Lets ConsoleNotifier (dry-run mode) read recap replies from your terminal.
     stdin_open: true

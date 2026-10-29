@@ -1,0 +1,48 @@
+name: Deploy image
+
+# Builds the container on every push to main and pushes it to Artifact Registry.
+# The server pulls that image on a timer (see README, "Running it in the cloud").
+# Nothing here deploys directly, so the VM needs no inbound access or SSH key.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  REGION: us-west1
+  REPOSITORY: dla
+  IMAGE: daily-learning
+
+jobs:
+  build-and-push:
+    # A fork enables this with the repository variable DEPLOY_ENABLED=true
+    # (Settings -> Secrets and variables -> Actions -> Variables). The upstream
+    # repo leaves it unset, so the job skips instead of failing on a missing key.
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      # Tagged with the commit SHA for pinning/rollback, and :latest for the timer.
+      - name: Build and push
+        env:
+          PROJECT: ${{ vars.GCP_PROJECT }}
+        run: |
+          set -eu
+          base="${REGION}-docker.pkg.dev/${PROJECT}/${REPOSITORY}/${IMAGE}"
+          docker build -t "${base}:${GITHUB_SHA}" -t "${base}:latest" .
+          docker push "${base}:${GITHUB_SHA}"
+          docker push "${base}:latest"

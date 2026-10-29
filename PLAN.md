@@ -129,3 +129,11 @@ TELEGRAM_CHAT_ID=
   with either a `--testrun-recap` style flag that seeds a pending session, or
   a dedicated manual check in the README. Not urgent: the unit tests cover the
   loop's grading branch with a fake `Llm`.
+- **Missed cron tick.** Scheduling is in-process, so a deploy or crash spanning
+  `reminder_time` skips that day with no retry (`pendingRecap` covers replies, not sends).
+  Candidate fix: on startup, if today has no session and the reminder time has passed, run
+  the daily loop once.
+- **No schema migrations.** `initSchema` is `CREATE TABLE IF NOT EXISTS` only, with no
+  `user_version` stepping, so the first added column would silently not reach an
+  already-deployed database. Matters once people run this as a long-lived service
+  (README, "Running it in the cloud"). Candidate fix: `PRAGMA user_version` migration steps.
