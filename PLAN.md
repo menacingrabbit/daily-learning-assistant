@@ -129,3 +129,7 @@ TELEGRAM_CHAT_ID=
   with either a `--testrun-recap` style flag that seeds a pending session, or
   a dedicated manual check in the README. Not urgent: the unit tests cover the
   loop's grading branch with a fake `Llm`.
+- ~~**Missed cron tick.**~~ Implemented: at startup (scheduler mode) the app checks
+  `isReminderDue()` — if the local `reminder_time` has already passed today and there is no
+  session row for today, it runs the daily loop once as a catch-up. `--once` is unaffected
+  (it always runs), and a restart after today's send is a no-op.

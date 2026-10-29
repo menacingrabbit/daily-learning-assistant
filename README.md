@@ -248,6 +248,12 @@ Now the bot messages you each morning, and your recaps arrive as long as the con
 That means your computer must be awake and Docker Desktop running — a sleeping laptop sends
 nothing. The container only makes outbound connections, so you never need to open a port.
 
+If the service was *not* running when `reminder_time` came around (a restart, an update, a
+laptop that was asleep), it catches up on the next start: when the service starts after
+`reminder_time` and today's topic was never sent, it sends it straight away instead of
+waiting for tomorrow. Restarting later the same day after the topic already went out does
+nothing extra.
+
 ---
 
 ## 🐋 Docker reference

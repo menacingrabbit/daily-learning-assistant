@@ -82,7 +82,7 @@ Telegram token/chat id → `ConsoleNotifier` (dry-run, replies from stdin).
 
 | Command | What it does |
 |---|---|
-| `npm run start` | run the scheduler + Telegram polling until Ctrl+C |
+| `npm run start` | run the scheduler + Telegram polling until Ctrl+C (catches up a missed tick at startup, see below) |
 | `npm run dev` | same as start, auto-reload on code changes (`tsx watch`) |
 | `npm run once` | run one full day cycle immediately against the **real** DB, then exit |
 | `npm run testrun` | simulate the daily trigger against an **isolated temp DB** (real history untouched), print result, exit |
@@ -94,6 +94,13 @@ Telegram token/chat id → `ConsoleNotifier` (dry-run, replies from stdin).
 | `docker compose run --rm daily-learning node dist/index.js --once` | containerised one-shot equivalent of `npm run once` |
 
 CLI flags: `--once`, `--testrun`, `--list`, `--config=<path>` (or `--config <path>`).
+
+**Startup catch-up (scheduler mode only).** Scheduling is in-process, so a deploy, crash or
+sleep spanning `reminder_time` would otherwise skip the day. After registering the cron job,
+`main()` checks `isReminderDue(now, reminderTime, timezone)` (in `src/index.ts`, timezone-aware
+via `Intl`): if the local reminder time has passed today and `store.getSession(today)` is empty,
+it runs `runDaily()` once immediately. A restart after today's send is a no-op; `--once` and
+`--testrun` are unaffected (`--once` always runs).
 
 ### Docker details (the beginner-facing path)
 

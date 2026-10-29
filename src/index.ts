@@ -45,6 +45,33 @@ export function cronExpression(reminderTime: string): string {
   return `${minute} ${hour} * * *`;
 }
 
+/** Minutes since local midnight for `date` in `timezone`. */
+export function localMinutesOfDay(date: Date, timezone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? 0);
+  const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? 0);
+  return hour * 60 + minute;
+}
+
+/**
+ * True when today's reminder time has already passed in the configured
+ * timezone. Used at startup to catch up on a tick missed while the service
+ * was down (a deploy, a crash, a laptop that was asleep).
+ */
+export function isReminderDue(
+  now: Date,
+  reminderTime: string,
+  timezone: string,
+): boolean {
+  const [hour, minute] = reminderTime.split(':').map(Number);
+  return localMinutesOfDay(now, timezone) >= (hour ?? 0) * 60 + (minute ?? 0);
+}
+
 export function parseCliArgs(argv: string[]): {
   once: boolean;
   testrun: boolean;
@@ -194,6 +221,23 @@ async function main(): Promise<void> {
     },
     { timezone: appConfig.timezone, name: 'daily-topic', noOverlap: true },
   );
+
+  // Catch up on a tick missed while the service was down: if the reminder time
+  // has already passed today and today's topic was never sent, run the loop
+  // now instead of waiting for tomorrow.
+  const startupNow = new Date();
+  const today = toLocalDate(startupNow, appConfig.timezone);
+  if (isReminderDue(startupNow, appConfig.reminderTime, appConfig.timezone)) {
+    if (store.getSession(today)) {
+      console.log('[daily] started after reminder time; today already handled — no catch-up needed');
+    } else {
+      console.log('[daily] started after reminder time and no session for today — catching up now');
+      runDaily({ store, notifier, llm, config: appConfig, now: () => startupNow }).catch(
+        (err) => console.error('[daily] catch-up run failed:', err),
+      );
+    }
+  }
+
   console.log(
     `[daily-learning] notifier=${notifier.name} model=${llm.name} next=every ${appConfig.reminderTime} ${appConfig.timezone}`,
   );

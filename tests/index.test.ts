@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createServices, cronExpression, parseCliArgs } from '../src/index.js';
+import { createServices, cronExpression, isReminderDue, parseCliArgs } from '../src/index.js';
 import { ConsoleNotifier } from '../src/notify/console.js';
 
 describe('parseCliArgs', () => {
@@ -45,6 +45,29 @@ describe('cronExpression', () => {
     expect(cronExpression('08:00')).toBe('0 8 * * *');
     expect(cronExpression('21:45')).toBe('45 21 * * *');
     expect(cronExpression('00:05')).toBe('5 0 * * *');
+  });
+});
+
+describe('isReminderDue', () => {
+  it('is false before the reminder time and true at or after it', () => {
+    // 2026-08-24T06:00:00Z is 08:00 in Europe/Berlin (CEST, UTC+2).
+    expect(isReminderDue(new Date('2026-08-24T05:59:00Z'), '08:00', 'Europe/Berlin')).toBe(false);
+    expect(isReminderDue(new Date('2026-08-24T06:00:00Z'), '08:00', 'Europe/Berlin')).toBe(true);
+    expect(isReminderDue(new Date('2026-08-24T18:00:00Z'), '08:00', 'Europe/Berlin')).toBe(true);
+  });
+
+  it('evaluates against the configured timezone, not the host clock', () => {
+    // 2026-08-24T07:30:00Z is 09:30 Berlin but 00:30 in Los Angeles.
+    const now = new Date('2026-08-24T07:30:00Z');
+    expect(isReminderDue(now, '08:00', 'Europe/Berlin')).toBe(true);
+    expect(isReminderDue(now, '08:00', 'America/Los_Angeles')).toBe(false);
+  });
+
+  it('handles midnight-wrapping reminder times', () => {
+    expect(isReminderDue(new Date('2026-08-24T06:00:00Z'), '00:00', 'Europe/Berlin')).toBe(true);
+    expect(isReminderDue(new Date('2026-08-24T21:59:00Z'), '00:00', 'Europe/Berlin')).toBe(true);
+    // 22:00Z = 00:00 Berlin on 2026-08-25 (counts as the new day's reminder).
+    expect(isReminderDue(new Date('2026-08-24T22:00:00Z'), '23:30', 'Europe/Berlin')).toBe(false);
   });
 });
 
